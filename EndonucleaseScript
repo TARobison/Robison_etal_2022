@@ -1,0 +1,32 @@
+blast <- "/home/scripts/ncbi-blast-2.10.0+/bin/blastx"
+query <- "Endonuclease/organellar_endonucleases.fasta" 
+db_type <- "nr"
+format <- 6
+word_size <- 4
+output <- "./Endonuclease/endonucleases_results.csv"
+cores <- detectCores()
+colnames <- c("qseqid","sseqid","pident","length","mismatch","gapopen","qstart","qend","sstart","send","evalue","bitscore")
+
+#Conduct blast search + tidy conversion of those resutls
+blast_out <- system2(command=blast,
+                    args=c("-query", query,
+                            "-db", db_type,
+                            "-outfmt", format,
+                            "-word_size", word_size,
+                            "-num_threads", cores),
+                    wait=TRUE,stdout=TRUE) %>%
+    as_tibble() %>%
+    separate(col = value,
+        into = colnames,
+        sep = "\t",
+        convert = TRUE)
+write.table(blast_out, output, quote=FALSE, row.names=FALSE, col.names=TRUE)
+
+#Group blast hits by their query sequence, take the 20 best hits, exclude any with a bitscore below 61 then recombine those grouped seqs into one table
+topHits <- blast_out %>%
+        group_by(qseqid) %>%
+        top_n(20) %>%
+        filter(bitscore > 60) %>%
+        ungroup()
+write.table(topHits$sseqid, './Endonuclease/topHitsendonucleases_filtered_final.txt', row.names=FALSE, col.names=FALSE, quote=FALSE)
+write.table(topHits, './Endonuclease/topHitsendonucleases_filtered_final_full.txt', row.names=FALSE, quote=FALSE)
